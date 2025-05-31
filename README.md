@@ -55,5 +55,10 @@ PGEN1.TABLE<<|
 ## Design
 
 ## Implementation notes
+- MA suggested that the part handling the DMA shouldn't know the REPEATS, even
+  if that means spending more block ram.
+- MA suggested to preallocate DMA buffers instead of doing it on demand, even if
+  that means having a smaller maximum number of buffers allocated.
+
 
 ## Testing
