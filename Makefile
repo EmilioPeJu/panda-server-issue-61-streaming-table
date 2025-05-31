@@ -12,3 +12,6 @@ cocotb_tests:
         --sim $(SIMULATOR) \
         $(MODULE) \
         '$(TEST)'
+
+dev_tests:
+	panda_src_dir=$(FPGA) $(PYTHON) -m pytest dev-tests
