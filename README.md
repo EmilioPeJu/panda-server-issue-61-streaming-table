@@ -86,3 +86,37 @@ It is important to note that tables are pushed using base64 encoding to reduce
 bandwidth required, similarly, pcap is used to validate data using unframed raw
 mode.
 
+## Perf report
+- `perf` was built and manually copied to the target, to do this, I added the
+  following target to rootfs:
+```
+perf:
+	$(EXPORTS) KBUILD_OUTPUT=$(KERNEL_BUILD) $(MAKE) -j 12 -C $(KERNEL_SRC)/tools/perf
+```
+Then manually copied the result from the built directory.
+- Some compiler options were added, the following is an excerpt from the server
+  mafile:
+
+```
+ifdef DEBUG
+CFLAGS += -O0 -g -fomit-frame-pointer
+endif
+```
+
+Then I built using: `make DEBUG=1`
+- Perf was run while I was doing the streaming tests:
+```bash
+perf record -F 999 -a -g --call-graph dwarf -- sleep 10
+perf script > /tmp/out.perf
+```
+- The flamegraph was generated with the following commands:
+```bash
+scp panda:/tmp/out.perf .
+perl src/FlameGraph/stackcollapse-perf.pl out.perf > out.folded
+perl src/FlameGraph/flamegraph.pl out.folded > perf-flamegraph.svg
+```
+- Flamegraph 1: while pushing 10 buffers
+![](perf-flamegraph-1.svg)
+It turned out, the bottleneck was ethernet, for some reason, I can only push
+around 12MB/s to the ZedBoard over the ethernet link, I will re-try the same
+test on a Pandabox (which shouldn't have that limitation).
