@@ -78,3 +78,5 @@ completion condition, it should free all buffers.
 
 
 ## Testing
+- The cocotb timing tests were extracted from `cocotb` branch in
+  PandABlocks-FPGA, this was to speed up the dev-test cycle.
