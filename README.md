@@ -81,3 +81,8 @@ completion condition, it should free all buffers.
 - The cocotb timing tests were extracted from `cocotb` branch in
   PandABlocks-FPGA, this was to speed up the dev-test cycle.
 - Development tests were added in the folder `dev-tests`
+- Scripts to facilitate hardware testing are in `hardware-tests`
+It is important to note that tables are pushed using base64 encoding to reduce
+bandwidth required, similarly, pcap is used to validate data using unframed raw
+mode.
+
