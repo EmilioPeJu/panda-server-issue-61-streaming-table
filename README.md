@@ -50,9 +50,25 @@ PGEN1.TABLE<<|
   INIT (it needs initialization), ONE_BUFFER (one buffer mode), STREAMING
   (streaming mode), STREAMING_LAST (the last buffer of the stream was queued).
 - [ ] Req 11: DMA overrun and underrun should be detected and shown in the
-  HEALTH register, next attempts to push table data should error.
+  HEALTH register, following attempts to push table data should error.
 
 ## Design
+### FPGA
+![](seq-structure.drawio.png)
+- The instance in the FPGA will interrupt the CPU on two events: when it just
+became ready to accept a new table in streaming mode or when it has used all
+the buffers so the driver can free resources.
+- `wrapping_mode` and `loop_one_buffer` are signals to implement an optimization
+to allow reusing the fifo as a table, this is to do with "Opt 4" point in
+requirements.
+
+### Server
+- The driver now has to handle a new interrupt and do the required processing,
+on ready condition, it should check the queue to push the next table, on
+completion condition, it should free all buffers.
+- Pushing the data to the driver is done via a new ioctl command, this is
+  because the write syscall doesn't allow passing flags which we need to
+  indicate if it is the last buffer.
 
 ## Implementation notes
 - MA suggested that the part handling the DMA shouldn't know the REPEATS, even
