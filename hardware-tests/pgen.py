@@ -79,9 +79,8 @@ def handle_pgen(args):
         print(f'Pushing table {i} from {block_start} to {block_stop - 1}')
         block_start += args.lines_per_block
         block_stop += args.lines_per_block
-        commands = client.prepare_table_command(
+        result = client.put_table(
             f'{PGEN_NAME}.TABLE', content, more=(i != args.nblocks - 1))
-        result = client.send_recv(commands)
         t2 = time.time()
         print(f'time to push table {i}: {t2 - t1}')
         assert result.startswith(b'OK'), f'Error putting table: {result}'
