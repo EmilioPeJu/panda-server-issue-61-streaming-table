@@ -75,7 +75,11 @@ completion condition, it should free all buffers.
   if that means spending more block ram.
 - MA suggested to preallocate DMA buffers instead of doing it on demand, even if
   that means having a smaller maximum number of buffers allocated.
-
+- How many buffers? and what's the best size? I used the maximum possible size
+  using the page allocator 4MB, unfortunately, some targets like ZedBoard don't
+  have too many of those buffers available, so I set the number of buffers to 8
+  per instance, which would allow having 2 seconds worth of data at maximum
+  speed (see Req 3).
 
 ## Testing
 - The cocotb timing tests were extracted from `cocotb` branch in
@@ -86,7 +90,9 @@ It is important to note that tables are pushed using base64 encoding to reduce
 bandwidth required, similarly, pcap is used to validate data using unframed raw
 mode.
 
-## Perf report
+## Performance analysis
+
+### Perf report
 - `perf` was built and manually copied to the target, to do this, I added the
   following target to rootfs:
 ```
@@ -120,3 +126,15 @@ perl src/FlameGraph/flamegraph.pl out.folded > perf-flamegraph.svg
 It turned out, the bottleneck was ethernet, for some reason, I can only push
 around 12MB/s to the ZedBoard over the ethernet link, I will re-try the same
 test on a Pandabox (which shouldn't have that limitation).
+
+### ILA report
+- A system integrated logic analyser was added to verify the AXI transactions.
+- Observations:
+From end of last burst to start of next burst it takes 22 cycles.
+Given that there is an arbiter, this number depends on the number of dma
+instances, in this specific case, there were 2 of them.
+
+If we consider maximum bursts, this provides an utilization of 92%, at 125MHz,
+the maximum bandwidth would be around 460MB/s.
+Considering that in practice, we can push the ethernet link to around 60MB/s,
+this test confirms that the AXI will not be the bottleneck.
