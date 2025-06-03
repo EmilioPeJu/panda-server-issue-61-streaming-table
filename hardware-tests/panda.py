@@ -1,7 +1,7 @@
 import logging
 import numpy as np
+import re
 import socket
-import time
 
 from base64 import b64encode
 from typing import List
@@ -9,18 +9,61 @@ from typing import List
 log = logging.getLogger(__name__)
 
 
-class Client(object):
+class PandaClient(object):
     def __init__(self, host: str):
         self.host = host
+        self.fields = []
+        self.capture_fields = []
+        self.instances = set()
+        self.sock = None
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # disable nagle algorithm to reduce latency
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.connect((self.host, 8888))
+        self.fetch_metadata()
+
+    def get_first_instance_name(self, block_name: str):
+        for instance in sorted(self.instances):
+            if instance.startswith(block_name):
+                return instance
+        return ''
+
+    def get_field_names_with(self, string: str):
+        result = []
+        for i in self.fields:
+            if re.search(string, i):
+                result.append(i)
+        return result
 
     def close(self):
         self.sock.close()
+
+    def disable_captures(self):
+        for field in self.capture_fields:
+            self.send_recv(f'{field}=No')
+
+    def fetch_metadata(self):
+        result = bytearray()
+        self.send('*CHANGES?')
+        while True:
+            chunk = self.recv()
+            result.extend(chunk)
+            if chunk.endswith(b'.\n'):
+                break
+
+        self.capture_fields = []
+        for line in result.split(b'\n'):
+            if b'=' not in line:
+                continue
+            part1, part2 = line.split(b'=')
+            field = part1[1:].decode()
+            if '.CAPTURE' in field:
+                self.capture_fields.append(field)
+
+            self.fields.append(field)
+            self.instances.add(field.split('.')[0])
 
     def send(self, commands: str | List[str]):
         if isinstance(commands, str):
@@ -48,23 +91,6 @@ class Client(object):
 
     def put_table(self, name: str, content: np.ndarray, more=False):
         return self.send_recv(self.prepare_table_command(name, content, more))
-
-    def wait_for_table_room(self, name, thres):
-        while True:
-            queued = int(self.get(f'{name}.TABLE.QUEUED_LINES'))
-            if queued <= thres:
-                print(f'Queued lines {queued} <= {thres}')
-                return queued
- 
-            time.sleep(0.01)
-
-    def wait_for_table_fill(self, name,  thres):
-        while True:
-            queued = int(self.get(f'{name}.TABLE.QUEUED_LINES'))
-            if queued >= thres:
-                print(f'Queued lines {queued} >= {thres}')
-                return queued
-            time.sleep(0.01)
 
     def load_state(self, state: str):
         acc = []
@@ -112,14 +138,30 @@ class Client(object):
         if name.isupper():
             return Item(name, self)
 
+    def __getitem__(self, item):
+        item = item.upper()
+        if '.' in item:
+            part1, part2 = item.split('.', 1)
+            return getattr(self, part1)[part2]
+        else:
+            return getattr(self, item)
+
 
 class Item(object):
-    def __init__(self, path: str, client: Client):
+    def __init__(self, path: str, client: PandaClient):
         self.path = path
         self.client = client
 
     def __getattr__(self, name):
         return Item(f'{self.path}.{name}', self.client)
+
+    def __getitem__(self, item):
+        item = item.upper()
+        if '.' in item:
+            part1, part2 = item.split('.', 1)
+            return getattr(self, part1)[part2]
+        else:
+            return getattr(self, item)
 
     def get(self):
         result = bytearray()
@@ -136,7 +178,10 @@ class Item(object):
         elif result.startswith(b'!'):
             return [int(i[1:]) for i in result.split()[:-1]]
         else:
-            val = result[4:-1]
+            if b'=' not in result:
+                raise ValueError(
+                    f'Unexpected response for {self.path}: {result}')
+            val = result.split(b'=', 1)[1].strip()
             if val.isdigit():
                 return int(val)
             try:
@@ -154,7 +199,3 @@ class Item(object):
 
         if not result.startswith(b'OK'):
             raise ValueError(f'Error putting {self.path}: {result}')
-
-
-if __name__ == '__main__':
-    main()
