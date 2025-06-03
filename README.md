@@ -41,7 +41,7 @@ PGEN1.TABLE<<|
 ```
 
 - [ ] Req 8: the append mode is fully removed (at least in long tables).
-- [ ] Req 9: the server should expose some field to indicate the progress on
+- [x] Req 9: the server should expose some field to indicate the progress on
   consumption of the data, current proposal `<block>.TABLE.QUEUED_LINES?`
   indicates how many lines are in the queue plus the ones been currently used
   in the FPGA.
@@ -49,7 +49,7 @@ PGEN1.TABLE<<|
   `<block>.TABLE.MODE`, it could have one of the following values:
   INIT (it needs initialization), ONE_BUFFER (one buffer mode), STREAMING
   (streaming mode), STREAMING_LAST (the last buffer of the stream was queued).
-- [ ] Req 11: DMA overrun and underrun should be detected and shown in the
+- [x] Req 11: DMA overrun and underrun should be detected and shown in the
   HEALTH register, following attempts to push table data should error.
 
 ## Design
@@ -89,6 +89,21 @@ completion condition, it should free all buffers.
 It is important to note that tables are pushed using base64 encoding to reduce
 bandwidth required, similarly, pcap is used to validate data using unframed raw
 mode.
+- Test sending 2048 buffers:
+```bash
+./hardware-tests/pgen.py --lines-per-block 800000 --clock-period-us 0.4 --nblocks 2048 192.168.0.1
+```
+The test worked successfully, sending a total of 6.25GB of table data.
+
+- Test sending 5096 4MB buffers:
+```bash
+./hardware-tests/pgen.py --lines-per-block 1048576 --start-number 0 --clock-period-us 0.4 --nblocks 5096 192.168.0.1
+```
+The test worked successfully, sending ~20.3GB of table data.
+
+- I detected memory leaks after long use. I investigated further and found that
+  if there is an error (e.g. DMA underrun) and I keep sending buffers, those
+  buffers were not freed, I found the bug in the driver and fixed it.
 
 ## Performance analysis
 
@@ -108,7 +123,6 @@ ifdef DEBUG
 CFLAGS += -O0 -g -fomit-frame-pointer
 endif
 ```
-
 Then I built using: `make DEBUG=1`
 - Perf was run while I was doing the streaming tests:
 ```bash
