@@ -7,6 +7,7 @@ from base64 import b64encode
 from typing import List
 
 log = logging.getLogger(__name__)
+TIMEOUT = 3
 
 
 class PandaClient(object):
@@ -19,6 +20,7 @@ class PandaClient(object):
 
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(TIMEOUT)
         # disable nagle algorithm to reduce latency
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.connect((self.host, 8888))
@@ -74,7 +76,11 @@ class PandaClient(object):
             self.sock.sendall(b'\n')
 
     def recv(self):
-        return self.sock.recv(4096)
+        result = bytearray()
+        while not result.endswith(b'\n'):
+            result.extend(self.sock.recv(4096))
+
+        return result
 
     def send_recv(self, commands: str | List[str]):
         self.send(commands)
