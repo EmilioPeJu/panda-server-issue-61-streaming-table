@@ -80,6 +80,10 @@ completion condition, it should free all buffers.
   have too many of those buffers available, so I set the number of buffers to 8
   per instance, which would allow having 2 seconds worth of data at maximum
   speed (see Req 3).
+- Once a streaming run finishes, in order to restart the instance, you need to
+  clear the table, the reason why this is not done automatically (or on disable)
+  is that the script doing the table pushing should be aware of the end condition
+  (either by error or gracefully).
 
 ## Testing
 - The cocotb timing tests were extracted from `cocotb` branch in
