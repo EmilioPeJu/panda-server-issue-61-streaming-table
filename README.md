@@ -3,7 +3,7 @@
 ## Requirements
 - [x] Req 1: There should be 2 modes
 
-  ONE BUFFER mode: only one table is sent and it is possible to repeat
+  FIXED mode: only one table is sent and it is possible to repeat
 
   STREAMING mode: more than one table can be pushed.
 
@@ -12,11 +12,11 @@ able to push the next table or tables.
 - [x] Req 3: The sequencer block should be able to run at 1MHz, this means the DMA
   and the socket to send the table data should be able to sustain at least
   16 MB/s.
-- [x] Opt 4: In one buffer mode, small tables (say < 4K entries) can run at 1
+- [x] Opt 4: In fixed mode, small tables (say < 4K entries) can run at 1
 entry per tick.
-- [x] Req 5: In one buffer mode, we should be able to reuse the last buffer sent
+- [x] Req 5: In fixed mode, we should be able to reuse the last buffer sent
   without requiring to reset and restart the DMA engine.
-- [x] Req 6: In the server interface, entering the one buffer mode is done by
+- [x] Req 6: In the server interface, entering the fixed mode is done by
   sending a table with `<` character, e.g.
 
 ```
@@ -47,7 +47,7 @@ PGEN1.TABLE<<|
   in the FPGA.
 - [ ] Req 10: the server should expose the current mode, e.g.
   `<block>.TABLE.MODE`, it could have one of the following values:
-  INIT (it needs initialization), ONE_BUFFER (one buffer mode), STREAMING
+  INIT (it needs initialization), FIXED (fixed mode), STREAMING
   (streaming mode), STREAMING_LAST (the last buffer of the stream was queued).
 - [x] Req 11: DMA overrun and underrun should be detected and shown in the
   HEALTH register, following attempts to push table data should error.
@@ -59,7 +59,7 @@ PGEN1.TABLE<<|
 became ready to accept a new table in streaming mode or when it has used all
 the buffers so the driver can free resources.
 - `wrapping_mode` and `loop_one_buffer` are signals to implement an optimization
-to allow reusing the fifo as a table, this is to do with "Opt 4" point in
+to allow reusing the fifo as a table, this is to do with point "Opt 4" in
 requirements.
 
 ### Server
