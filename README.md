@@ -112,21 +112,41 @@ completion condition, it should free all buffers.
 It is important to note that tables are pushed using base64 encoding to reduce
 bandwidth required, similarly, pcap is used to validate data using unframed raw
 mode.
-- Test sending 2048 buffers:
-```bash
-./hardware-tests/pgen.py --lines-per-block 800000 --clock-period-us 0.4 --nblocks 2048 192.168.0.1
-```
-The test worked successfully, sending a total of 6.25GB of table data.
 
-- Test sending 5096 4MB buffers:
+- ZedBoard: PGEN test sending 5096x4MB buffers at 2.5MHz:
 ```bash
 ./hardware-tests/pgen.py --lines-per-block 1048576 --start-number 0 --clock-period-us 0.4 --nblocks 5096 192.168.0.1
+Lines per block 1048576
+Number of blocks 5096
+Clock period 0.4 us
+Bandwidth 9.537 MB/s
+Total size 20384.000 MB
+Pushing table 0 from 0 to 1048575
+time to push table 0: 0.11306047439575195
+Pushing table 1 from 1048576 to 2097151
+time to push table 1: 0.2505371570587158
+...
+Checked 5343543296 lines
 ```
 The test worked successfully, sending ~20.3GB of table data.
 
 - I detected memory leaks after long use. I investigated further and found that
   if there is an error (e.g. DMA underrun) and I keep sending buffers, those
   buffers were not freed, I found the bug in the driver and fixed it.
+
+- I found a mistake, I was setting the clock period in seconds, but the server
+  thinks the FPGA is clocked at 125MHz, which is wrong as I under-clocked to
+  50MHz for my tests. This means the test above was triggering 40% slower than 
+  I thought.
+
+  I changed the script to accept a fpga-freq parameter so that I can set the
+  clock period using ticks instead. I did a quick test to find the fastest
+  triggering, and it's 0.25us, I expect when I repeat the test with pandabox, it
+  will be faster, because it will have a faster NIC and also because it is
+  not under-clocked.
+
+- I got timing errors in my last build for Pandabox after implementing all the
+  requirements. I will analyze the reports in Vivado to optimize timing.
 
 ## Performance analysis
 

@@ -22,6 +22,7 @@ def main():
     for field_name in args.name.split(','):
         new_fields = [
             client[i] for i in client.get_field_names_with(field_name)]
+        new_fields.sort(key=lambda f: f.path)
         if not new_fields:
             fields.append(client[field_name])
         else:

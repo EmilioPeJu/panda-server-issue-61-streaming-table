@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import logging
+import math
 import multiprocessing
 import numpy as np
 import time
@@ -54,6 +55,7 @@ def parse_args():
         assert val > 0
         return val
     parser.add_argument('--nblocks', type=nblocks_type, default=1)
+    parser.add_argument('--fpga-freq', type=int, default=125000000)
     parser.add_argument('host')
     args = parser.parse_args()
     if args.repeats != 1 and args.nblocks != 1:
@@ -68,13 +70,13 @@ def handle_pgen(args):
     pgen_name = client.get_first_instance_name('PGEN')
     pgen = client[pgen_name]
     clock_name = client.get_first_instance_name('CLOCK')
-    clock = client[clock_name]
     # state is clearing the table
     client.load_state(layout.replace('PGEN1', pgen_name)
                             .replace('CLOCK1', clock_name))
     bw = 4 / (args.clock_period_us * 1e-6) / 1024**2
     pgen.REPEATS.put(args.repeats)
-    clock.PERIOD.put(args.clock_period_us * 1e-6)
+    ticks = math.floor(args.clock_period_us * 1e-6 * args.fpga_freq)
+    client[clock_name].PERIOD.RAW.put(ticks)
     print(f'Lines per block {args.lines_per_block}')
     print(f'Number of blocks {args.nblocks}')
     print(f'Clock period {args.clock_period_us} us')
