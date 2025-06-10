@@ -86,8 +86,16 @@ class PandaClient(object):
         self.send(commands)
         return self.recv()
 
-    def prepare_table_command(self, name: str, content: np.ndarray, more=False):
-        commands = [f'{name}<{'|' if more else ''}B']
+    def prepare_table_command(self, name: str, content: np.ndarray,
+                              streaming=False, last=False):
+
+        suffix = '<'
+        if streaming and last:
+            suffix = '<<|'
+        elif streaming:
+            suffix = '<<'
+
+        commands = [f'{name}{suffix}B']
         chunk_size = 191
         #chunk_size = 100000
         for i in range(0, len(content), chunk_size):
@@ -95,8 +103,10 @@ class PandaClient(object):
         commands.append('')
         return commands
 
-    def put_table(self, name: str, content: np.ndarray, more=False):
-        return self.send_recv(self.prepare_table_command(name, content, more))
+    def put_table(self, name: str, content: np.ndarray,
+                  streaming=False, last=False):
+        return self.send_recv(self.prepare_table_command(name, content,
+                                                         streaming, last))
 
     def load_state(self, state: str):
         acc = []
