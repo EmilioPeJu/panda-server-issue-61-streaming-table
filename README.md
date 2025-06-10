@@ -26,7 +26,7 @@ entry per tick.
  3
  ```
 
-- [ ] Req 7: In the server interface, entering the streaming mode is done by
+- [x] Req 7: In the server interface, entering the streaming mode is done by
 sending a table with `<<` characters and sending the last table with `<<|`
 characters, e.g.
 ```
@@ -40,17 +40,27 @@ PGEN1.TABLE<<|
 
 ```
 
-- [ ] Req 8: the append mode is fully removed (at least in long tables).
+- [x] Req 8: the append mode is fully removed (at least in long tables).
 - [x] Req 9: the server should expose some field to indicate the progress on
   consumption of the data, current proposal `<block>.TABLE.QUEUED_LINES?`
   indicates how many lines are in the queue plus the ones been currently used
   in the FPGA.
-- [ ] Req 10: the server should expose the current mode, e.g.
+- [x] Req 10: the server should expose the current mode, e.g.
   `<block>.TABLE.MODE`, it could have one of the following values:
   INIT (it needs initialization), FIXED (fixed mode), STREAMING
   (streaming mode), STREAMING_LAST (the last buffer of the stream was queued).
 - [x] Req 11: DMA overrun and underrun should be detected and shown in the
   HEALTH register, following attempts to push table data should error.
+- [x] Req 12: Reading a streaming table from the server should return an empty
+  table.
+- [x] Req 13: In streaming mode, a explicit table reset is required to change
+  to a different mode. This is to ensure a script pushing the tables is aware of
+  the end condition.
+- [x] Req 14: Transition from fixed mode to fixed mode (with different data) or
+  to streaming mode is allowed without requiring an explicit reset (the server
+  will be doing the table reset automatically under the hood).
+- [x] Req 15:  `<block>.TABLE>QUEUED_LINES` must be included in the change set
+  (to get notified by `*CHANGES?`).
 
 ## Design
 ### FPGA
