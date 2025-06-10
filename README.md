@@ -94,6 +94,15 @@ completion condition, it should free all buffers.
   clear the table, the reason why this is not done automatically (or on disable)
   is that the script doing the table pushing should be aware of the end condition
   (either by error or gracefully).
+- Sequence of events while sending a table:
+  - User sends a table to the server with `<`, `<<` or `<<|` depending on the
+    desired mode.
+  - Server pushes it to the driver.
+  - If hardware block is not busy, driver pushes it to hardware, otherwise, it
+    is queued.
+  - If there is a ready interrupt, the driver will push the buffer from the
+    queue.
+  - If there is a completion interrupt, the driver will free the buffers left.
 
 ## Testing
 - The cocotb timing tests were extracted from `cocotb` branch in
