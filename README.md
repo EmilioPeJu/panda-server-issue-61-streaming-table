@@ -103,6 +103,15 @@ completion condition, it should free all buffers.
   - If there is a ready interrupt, the driver will push the buffer from the
     queue.
   - If there is a completion interrupt, the driver will free the buffers left.
+- After implementing all the requirements I found I got timing failed while
+  building PandABox-no_fmc, at first I found the critical paths were in the
+  blocks I was working with, but after doing some optimizations, the critical
+  paths were not in those blocks anymore and timing was still failing,
+  mainly because of congestion (overused of the FPGA)... so I decided to reduce
+  the number of instances for the following blocks: SEQ=2, PGEN=1, SYNC=1 ...
+  and after that, timing was finally (barely) passing. However, CI showed some
+  other applications failing and I had to fully remove PGEN.
+- TC suggested to put back SYNC=2 and it seems to be working fine.
 
 ## Testing
 - The cocotb timing tests were extracted from `cocotb` branch in
@@ -113,7 +122,7 @@ It is important to note that tables are pushed using base64 encoding to reduce
 bandwidth required, similarly, pcap is used to validate data using unframed raw
 mode.
 
-- ZedBoard: PGEN test sending 5096x4MB buffers at 2.5MHz:
+- ZedBoard: PGEN test sending 5096x4MB buffers at 2.5MHz per line:
 ```bash
 ./hardware-tests/pgen.py --lines-per-block 1048576 --start-number 0 --clock-period-us 0.4 --nblocks 5096 192.168.0.1
 Lines per block 1048576
