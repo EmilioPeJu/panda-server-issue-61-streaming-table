@@ -59,7 +59,7 @@ class PandaClient(object):
         for line in result.split(b'\n'):
             if b'=' not in line:
                 continue
-            part1, part2 = line.split(b'=')
+            part1, part2 = line.split(b'=', 1)
             field = part1[1:].decode()
             if '.CAPTURE' in field:
                 self.capture_fields.append(field)
@@ -67,12 +67,12 @@ class PandaClient(object):
             self.fields.append(field)
             self.instances.add(field.split('.')[0])
 
-    def send(self, commands: str | List[str]):
-        if isinstance(commands, str):
-            commands = [commands]
+    def send(self, command: str | List[str]):
+        if isinstance(command, str):
+            command = [command]
 
-        for command in commands:
-            self.sock.sendall(command.encode())
+        for line in command:
+            self.sock.sendall(line.encode())
             self.sock.sendall(b'\n')
 
     def recv(self):
@@ -107,22 +107,6 @@ class PandaClient(object):
                   streaming=False, last=False):
         return self.send_recv(self.prepare_table_command(name, content,
                                                          streaming, last))
-
-    def load_state(self, state: str):
-        acc = []
-        reading_table = False
-        for line in state.splitlines():
-            if '<' in line:
-                acc.append(line)
-                reading_table = True
-            elif reading_table:
-                acc.append(line)
-                if line == '':
-                    self.send_recv(acc)
-                    reading_table = False
-            else:
-                self.send_recv(line)
-
     def arm(self):
         self.send_recv('*PCAP.ARM=')
 

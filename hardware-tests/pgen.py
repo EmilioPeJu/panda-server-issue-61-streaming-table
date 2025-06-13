@@ -9,39 +9,6 @@ import time
 from panda import PandaClient
 
 log = logging.getLogger(__name__)
-layout = \
-'''PGEN1.ENABLE=ZERO
-PGEN1.OUT.UNITS=
-PGEN1.OUT.OFFSET=0
-PGEN1.OUT.SCALE=1
-PGEN1.ENABLE.DELAY=0
-PGEN1.TRIG.DELAY=0
-PGEN1.REPEATS=1
-PGEN1.TRIG=CLOCK1.OUT
-PGEN1.TABLE<
-
-CLOCK1.ENABLE=PGEN1.ACTIVE
-CLOCK1.ENABLE.DELAY=0
-CLOCK1.PERIOD.UNITS=s
-CLOCK1.WIDTH.UNITS=s
-CLOCK1.PERIOD=1
-CLOCK1.WIDTH=0
-PCAP.ENABLE=PGEN1.ACTIVE
-PCAP.ENABLE.DELAY=10
-PCAP.TRIG=CLOCK1.OUT
-PCAP.TRIG.DELAY=1
-PCAP.TRIG_EDGE=Rising
-PCAP.GATE=ONE
-PCAP.GATE.DELAY=0
-PCAP.SHIFT_SUM=0
-PCAP.TS_TRIG.CAPTURE=No
-PGEN.OUT.CAPTURE=Value
-*METADATA.LAYOUT<
-{"PCAP": {"x": 261.52631578947376, "y": 51.70570087098238},
-"CLOCK1": {"x": -215.21052631578948, "y": 118.1004361068994},
-"PGEN1": {"x": -18.473684210526244, "y": -20.906579509534367}}
-
-'''
 
 
 def parse_args():
@@ -64,15 +31,45 @@ def parse_args():
     return args
 
 
-def handle_pgen(args):
-    client = PandaClient(args.host)
-    client.connect()
+def configure_layout(args, client):
     pgen_name = client.get_first_instance_name('PGEN')
     pgen = client[pgen_name]
     clock_name = client.get_first_instance_name('CLOCK')
-    # state is clearing the table
-    client.load_state(layout.replace('PGEN1', pgen_name)
-                            .replace('CLOCK1', clock_name))
+    clock = client[clock_name]
+    pgen.ENABLE.put('ZERO')
+    pgen.OUT.UNITS.put('')
+    pgen.OUT.OFFSET.put(0)
+    pgen.OUT.SCALE.put(1)
+    pgen.ENABLE.DELAY.put(0)
+    pgen.TRIG.DELAY.put(0)
+    pgen.REPEATS.put(1)
+    pgen.TRIG.put(f'{clock_name}.OUT')
+    client.put_table(f'{pgen_name}.TABLE', np.arange(0))
+    clock.ENABLE.put(f'{pgen_name}.ACTIVE')
+    clock.ENABLE.DELAY.put(0)
+    clock.PERIOD.UNITS.put('s')
+    clock.WIDTH.UNITS.put('s')
+    clock.PERIOD.put(1)
+    clock.WIDTH.put(0)
+    client.PCAP.ENABLE.put(f'{pgen_name}.ACTIVE')
+    client.PCAP.ENABLE.DELAY.put(10)
+    client.PCAP.TRIG.put(f'{clock_name}.OUT')
+    client.PCAP.TRIG.DELAY.put(1)
+    client.PCAP.TRIG_EDGE.put('Rising')
+    client.PCAP.GATE.put('ONE')
+    client.PCAP.GATE.DELAY.put(0)
+    client.PCAP.SHIFT_SUM.put(0)
+    client.PCAP.TS_TRIG.CAPTURE.put('No')
+    pgen.OUT.CAPTURE.put('Value')
+
+
+def handle_pgen(args):
+    client = PandaClient(args.host)
+    client.connect()
+    configure_layout(args, client)
+    pgen_name = client.get_first_instance_name('PGEN')
+    pgen = client[pgen_name]
+    clock_name = client.get_first_instance_name('CLOCK')
     bw = 4 / (args.clock_period_us * 1e-6) / 1024**2
     pgen.REPEATS.put(args.repeats)
     ticks = math.floor(args.clock_period_us * 1e-6 * args.fpga_freq)
@@ -84,6 +81,7 @@ def handle_pgen(args):
     print(f'Total size {args.lines_per_block * args.nblocks * 4 / 1024**2:.3f} MB')
     block_start = args.start_number
     block_stop = args.start_number + args.lines_per_block
+    streaming = args.nblocks > 1
     for i in range(args.nblocks):
         t1 = time.time()
         mblock_start = block_start & 0xffffffff
@@ -103,7 +101,7 @@ def handle_pgen(args):
         t2 = time.time()
         print(f'time to push table {i}: {t2 - t1}')
         assert result.startswith(b'OK'), f'Error putting table: {result}'
-        while pgen.TABLE.QUEUED_LINES.get() > 2 * args.lines_per_block:
+        while streaming and pgen.TABLE.QUEUED_LINES.get() > 2 * args.lines_per_block:
             time.sleep(0.1)
 
     client.close()

@@ -10,38 +10,6 @@ import time
 from panda import PandaClient
 
 log = logging.getLogger(__name__)
-layout = \
-'''SEQ1.ENABLE=ZERO
-SEQ1.REPEATS=1
-SEQ1.PRESCALE=0
-SEQ1.BITA=CLOCK1.OUT
-SEQ1.BITB=ZERO
-SEQ1.BITC=ZERO
-SEQ1.POSA=ZERO
-SEQ1.POSB=ZERO
-SEQ1.POSC=ZERO
-SEQ1.TABLE<
-
-CLOCK1.ENABLE=SEQ1.ACTIVE
-CLOCK1.ENABLE.DELAY=0
-CLOCK1.PERIOD.UNITS=s
-CLOCK1.WIDTH.UNITS=s
-CLOCK1.WIDTH.RAW=1
-PCAP.ENABLE=SEQ1.ACTIVE
-PCAP.ENABLE.DELAY=1
-PCAP.TRIG=CLOCK1.OUT
-PCAP.TRIG.DELAY=1
-PCAP.TRIG_EDGE=Rising
-PCAP.GATE=ONE
-PCAP.GATE.DELAY=0
-PCAP.SHIFT_SUM=0
-PCAP.TS_TRIG.CAPTURE=No
-*METADATA.LAYOUT<
-{"PCAP": {"x": 323.71144278606965, "y": -25.624997912354722},
-"CLOCK1": {"x": -86.64676616915409, "y": 160.87126664498544},
-"SEQ": {"x": 80.84577114427856, "y": -223.0074627624815}}
-
-'''
 
 
 def parse_args():
@@ -49,67 +17,79 @@ def parse_args():
     parser.add_argument('--repeats', type=int, default=1)
     parser.add_argument('--lines-per-block', type=int, default=16384)
     parser.add_argument('--clock-period-us', type=float, default=0.4)
-    parser.add_argument('--start-number', type=int, default=0)
-    def nblocks_type(s):
-        val = int(s)
-        assert val > 0
-        return val
-    parser.add_argument('--nblocks', type=nblocks_type, default=1)
+    parser.add_argument('--nblocks', type=int, default=1)
     parser.add_argument('--fpga-freq', type=int, default=125000000)
+    parser.add_argument(
+        '--threads', type=int, default=1,
+        help='Number of threads to use for creating the buffers data')
     parser.add_argument('host')
     args = parser.parse_args()
+
+    if args.nblocks < 1:
+        raise ValueError('nblocks must be greater than 0')
+
     if args.repeats != 1 and args.nblocks != 1:
         raise ValueError('repeats and nblocks cannot be used together')
+
+    if args.nblocks % args.threads != 0:
+        raise ValueError('nblocks must be divisible by threads')
 
     return args
 
 
-def handle_seq(args, q):
+def configure_layout(args, client):
+    seq_name = client.get_first_instance_name('SEQ')
+    seq = client[seq_name]
+    clock_name = client.get_first_instance_name('CLOCK')
+    clock = client[clock_name]
+    seq.ENABLE.put('ZERO')
+    seq.REPEATS.put(1)
+    seq.PRESCALE.put(0)
+    seq.BITA.put(f'{clock_name}.OUT')
+    seq.BITB.put('ZERO')
+    seq.BITC.put('ZERO')
+    seq.POSA.put('ZERO')
+    seq.POSB.put('ZERO')
+    seq.POSC.put('ZERO')
+    client.put_table(f'{seq_name}.TABLE', np.arange(0))
+    clock.ENABLE.put(f'{seq_name}.ACTIVE')
+    clock.ENABLE.DELAY.put(0)
+    clock.PERIOD.UNITS.put('s')
+    clock.WIDTH.UNITS.put('s')
+    clock.WIDTH.RAW=1
+    client.PCAP.ENABLE.put(f'{seq_name}.ACTIVE')
+    client.PCAP.ENABLE.DELAY.put(1)
+    client.PCAP.TRIG.put(f'{clock_name}.OUT')
+    client.PCAP.TRIG.DELAY.put(1)
+    client.PCAP.TRIG_EDGE.put('Rising')
+    client.PCAP.GATE.put('ONE')
+    client.PCAP.GATE.DELAY.put(0)
+    client.PCAP.SHIFT_SUM.put(0)
+    client.PCAP.TS_TRIG.CAPTURE.put('No')
+
+
+def handle_seq(args, q, event):
     client = PandaClient(args.host)
     client.connect()
     seq_name = client.get_first_instance_name('SEQ')
     seq = client[seq_name]
     clock_name = client.get_first_instance_name('CLOCK')
-    # state is clearing the table
-    layout_adapted = \
-        layout.replace('SEQ1', seq_name).replace('CLOCK1', clock_name)
-    print(layout_adapted)
-    client.load_state(layout_adapted)
-    bw = 4 / (args.clock_period_us * 1e-6) / 1024**2
     seq.REPEATS.put(args.repeats)
     ticks = math.floor(args.clock_period_us * 1e-6 * args.fpga_freq)
-    out_ticks = ticks // 2
     client[clock_name].PERIOD.RAW.put(ticks)
-    print(f'Lines per block {args.lines_per_block}')
-    print(f'Number of blocks {args.nblocks}')
-    print(f'Clock period {args.clock_period_us} us')
-    print(f'Bandwidth {bw:.3f} MB/s')
-    print(f'Total size {args.lines_per_block * args.nblocks * 16 / 1024**2:.3f} MB')
-    vals_history = []
+    streaming = args.nblocks > 1
     for i in range(args.nblocks):
         t1 = time.time()
-        content = np.zeros((args.lines_per_block * 4,), dtype=np.uint32)
-        for j in range(args.lines_per_block):
-            val = random.randint(0, 63)
-            w1 = 0x20001 | (val << 20)
-            w2 = 0
-            w3 = out_ticks
-            w4 = 0
-            content[j*4 + 0] = w1
-            content[j*4 + 1] = w2
-            content[j*4 + 2] = w3
-            content[j*4 + 3] = w4
-            vals_history.append(val)
-            q.put(val)
-
-        print(f'Pushing table {i}')
+        content = q.get()
+        print(f'seq: pushing table {i}')
         result = client.put_table(
             f'{seq_name}.TABLE', content, streaming=(args.nblocks > 1),
             last=(i == args.nblocks - 1))
         t2 = time.time()
-        print(f'time to push table {i}: {t2 - t1}')
-        assert result.startswith(b'OK'), f'Error putting table: {result}'
-        while seq.TABLE.QUEUED_LINES.get() > 2 * args.lines_per_block:
+        event.set()
+        print(f'seq: time to push table {i}: {t2 - t1:.3f}')
+        assert result.startswith(b'OK'), f'seq: error putting table: {result}'
+        while streaming and seq.TABLE.QUEUED_LINES.get() > 3 * args.lines_per_block:
             time.sleep(0.1)
 
     client.close()
@@ -121,46 +101,121 @@ def handle_pcap(args, q):
     client.disable_captures()
     seq_name = client.get_first_instance_name('SEQ')
     seq = client[seq_name]
-    bit_a_offset = seq.OUTA.OFFSET.get()
-    bit_f_offset = seq.OUTF.OFFSET.get()
-    bits_num = bit_a_offset // 32
-    assert bits_num == bit_f_offset // 32, \
-        "Cant't capture all out bits in one word"
-    client.PCAP[f'BITS{bits_num}'].CAPTURE.put('Value')
+    offsets = [
+        seq.OUTA.OFFSET.get(),
+        seq.OUTB.OFFSET.get(),
+        seq.OUTC.OFFSET.get(),
+        seq.OUTD.OFFSET.get(),
+        seq.OUTE.OFFSET.get(),
+        seq.OUTF.OFFSET.get()
+    ]
+    word_num = int(seq.OUTA.CAPTURE_WORD.get()[-1])
+    for out in ('OUTB', 'OUTC', 'OUTD', 'OUTE', 'OUTF'):
+        assert int(seq[out].CAPTURE_WORD.get()[-1]) == word_num, \
+            "pcap: cant't capture all out bits in one word"
+
+    print(f'Seq out bits offsets {offsets} from BITS{word_num}')
+    client.PCAP[f'BITS{word_num}'].CAPTURE.put('Value')
     client.arm()
     t1 = time.time()
     NOTIFY_PERIOD = 3.0
     checked = 0
+    acc = []
+    expected = q.get()
+    nblock = 1
     for data in client.collect():
         adata = np.frombuffer(data, dtype=np.uint32)
         for i in range(len(adata)):
-            val = (adata[i] >> bit_a_offset) & 0x3f
-            expected = q.get()
-            checked += 1
-            assert expected == val, \
-                f'Value mismatch: expected {expected}, got {val}'
-            t2 = time.time()
-            if t2 - t1 > NOTIFY_PERIOD:
-                t1 = t2
-                print(f'Checked {checked} values, last one was {val}')
+            word = adata[i]
+            val = 0
+            for bit_i in range(6):
+                if (1 << offsets[bit_i]) & word:
+                    val |= 1 << bit_i
+
+            acc.append(val)
+            if len(acc) >= len(expected):
+                if expected != acc:
+                    for j in range(len(expected)):
+                        assert expected[j] == acc[j], \
+                            f'pcap: entry {checked + j} expects {expected[j]}, got {acc[j]}'
+
+                checked += len(expected)
+                acc = []
+                if nblock < args.nblocks:
+                    expected = q.get()
+                    nblock += 1
+
+                t2 = time.time()
+                if t2 - t1 > NOTIFY_PERIOD:
+                    t1 = t2
+                    print(f'pcap: checked {checked} values, last one was {val}')
 
     print(f'Checked {checked} values')
+    expected_lines = args.lines_per_block * args.nblocks * args.repeats
+    assert expected_lines == checked, \
+            "pcap: expected {expected_lines} values, got {checked}"
     client.close()
+
+
+def data_producer(args, buffer_q, expect_q, lock):
+    n = args.nblocks // args.threads
+    ticks = math.floor(args.clock_period_us * 1e-6 * args.fpga_freq)
+    out_ticks = ticks // 2
+    for _ in range(n):
+        content = np.zeros((args.lines_per_block * 4,), dtype=np.uint32)
+        expected = []
+        for j in range(args.lines_per_block):
+            val = random.randint(0, 63)
+            w1 = 0x20001 | (val << 20)
+            w2 = 0
+            w3 = out_ticks
+            w4 = 0
+            content[j*4 + 0] = w1
+            content[j*4 + 1] = w2
+            content[j*4 + 2] = w3
+            content[j*4 + 3] = w4
+            expected.append(val)
+
+        lock.acquire()
+        buffer_q.put(content)
+        expect_q.put(expected)
+        lock.release()
 
 
 def main():
     args = parse_args()
-    q = multiprocessing.Queue()
-    procs = []
-    procs.append(
-        multiprocessing.Process(target=handle_seq, args=(args, q)))
-    procs.append(
-        multiprocessing.Process(target=handle_pcap, args=(args, q)))
-    for proc in procs:
-        proc.start()
-    time.sleep(1)
+    bw = 16 / (args.clock_period_us * 1e-6) / 1024**2
+    print(f'Lines per block: {args.lines_per_block}')
+    print(f'Number of blocks: {args.nblocks}')
+    print(f'Total lines: {args.lines_per_block * args.nblocks * args.repeats}')
+    print(f'Clock period: {args.clock_period_us} us')
+    print(f'Bandwidth: {bw:.3f} MB/s')
+    print(f'Total size: {args.lines_per_block * args.nblocks * 16 / 1024**2:.3f} MB')
     client = PandaClient(args.host)
     client.connect()
+    configure_layout(args, client)
+    expect_q = multiprocessing.Queue(128)
+    buffer_q = multiprocessing.Queue(128)
+    produced = multiprocessing.Event()
+    lock = multiprocessing.Lock()
+    procs = []
+    procs.append(
+        multiprocessing.Process(target=handle_seq, args=(args, buffer_q,
+                                                         produced)))
+    procs.append(
+        multiprocessing.Process(target=handle_pcap, args=(args, expect_q)))
+    for _ in range(args.threads):
+        procs.append(
+            multiprocessing.Process(target=data_producer, args=(args,
+                                                                buffer_q,
+                                                                expect_q,
+                                                                lock)))
+    for proc in procs:
+        proc.start()
+
+    # Wait for handle_seq to have a table
+    produced.wait()
+    time.sleep(1)
     seq_name = client.get_first_instance_name('SEQ')
     seq = client[seq_name]
     seq.ENABLE.put('ZERO')

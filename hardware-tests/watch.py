@@ -33,7 +33,10 @@ def main():
         tui.clear()
         tui.reset_line()
         for field in fields:
-            tui.add_str(f'{field.path}: {field.get()}')
+            try:
+                tui.add_str(f'{field.path}: {field.get()}')
+            except ValueError as e:
+                tui.add_str(f'{field.path}: {str(e)}')
 
     tui.add_draw_callback(draw)
     while True:
