@@ -1,0 +1,86 @@
+#!/bin/sh
+
+# Startup script for Panda server on target machine.
+
+. /etc/init.d/functions
+
+# File locations
+pidfile=/var/run/panda-server.pid
+
+panda_server=/opt/bin/panda_server
+panda_config=/opt/share/panda-fpga/config_d
+panda_module=/opt/share/panda-server/panda.ko
+panda_state=/opt/state/panda.state
+panda_mac=/qspi/MAC.FPGA
+
+extension_server=/opt/share/panda-server/extension_server
+extension_dir=/opt/share/panda-fpga/extensions
+
+load_panda_firmware=/opt/share/panda-fpga/load-panda-firmware
+
+
+fail()
+{
+    echo >&2 "$@"
+    exit 1
+}
+
+
+do_start()
+{
+    mount -t debugfs none /sys/kernel/debug &> /dev/null
+    # Only set the MAC addresses if the file is present
+    panda_server_mac=""
+    if [ -e $panda_mac ]; then
+        panda_server_mac="-M $panda_mac"
+    fi
+
+    [ -x $load_panda_firmware ]  ||  fail 'PandA firmware not installed'
+
+
+    # Remove the kernel module before reloading the FPGA if loaded.  If this
+    # rmmod fails then we can't proceed.
+    if lsmod | grep -q '^panda\>'; then
+        rmmod panda
+    fi  &&
+
+    # Load the Panda FPGA firmware.  This can fail, in which case the poor user
+    # will have to inspect the logs!
+    { [ -n "$NOFW" ] || $load_panda_firmware; }  &&
+
+    # Now we can load the module and go
+    insmod $panda_module  && { echo file panda_block.c +p > /sys/kernel/debug/dynamic_debug/control; } &&
+
+    # After inserting Panda module wait for devices to appear
+    i=0  &&
+    while [ $i -lt 10 ]; do
+        sleep 0.5
+        [ -e /dev/panda.map ]  &&  break
+        i=$((i+1))
+    done  &&
+
+    # Now start the extension server
+    $extension_server -d -s $extension_dir  &&
+
+    # Finally start the PANDA server
+    $panda_server \
+        -c $panda_config -f $panda_state -P $pidfile -D -R -X 9999 \
+        -r "$(head -n1 /etc/version)" \
+        $panda_server_mac
+}
+
+do_stop()
+{
+    kill -HUP $(cat $pidfile)  &&
+
+    # Remove the Panda driver.  We have to keep trying because we can't actually
+    # unload it until the server has finished shutting down.
+    i=0  &&
+    while [ $i -lt 10 ]; do
+        sleep 0.5
+        rmmod panda  &&  break
+        i=$((i+1))
+    done
+}
+
+do_start_stop "$1" panda-server
