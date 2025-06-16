@@ -77,8 +77,8 @@ def handle_pgen(args):
     print(f'Lines per block {args.lines_per_block}')
     print(f'Number of blocks {args.nblocks}')
     print(f'Clock period {args.clock_period_us} us')
-    print(f'Bandwidth {bw:.3f} MB/s')
-    print(f'Total size {args.lines_per_block * args.nblocks * 4 / 1024**2:.3f} MB')
+    print(f'Bandwidth {bw:.3f} MiB/s')
+    print(f'Total size {args.lines_per_block * args.nblocks * 4 / 1024**2:.3f} MiB')
     block_start = args.start_number
     block_stop = args.start_number + args.lines_per_block
     streaming = args.nblocks > 1

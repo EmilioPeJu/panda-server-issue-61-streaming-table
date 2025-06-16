@@ -11,7 +11,7 @@
 able to push the next table or tables.
 - [x] Req 3: The sequencer block should be able to run at 1MHz, this means the DMA
   and the socket to send the table data should be able to sustain at least
-  16 MB/s.
+  16 MB/s (approx 15.26MiB/s).
 - [x] Opt 4: In fixed mode, small tables (say < 4K entries) can run at 1
 entry per tick.
 - [x] Req 5: In fixed mode, we should be able to reuse the last buffer sent

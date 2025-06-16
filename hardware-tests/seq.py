@@ -184,13 +184,13 @@ def data_producer(args, buffer_q, expect_q, lock):
 
 def main():
     args = parse_args()
-    bw = 16 / (args.clock_period_us * 1e-6) / 1024**2
+    bw = 16 * 1e6 / (args.clock_period_us * 1024**2)
     print(f'Lines per block: {args.lines_per_block}')
     print(f'Number of blocks: {args.nblocks}')
     print(f'Total lines: {args.lines_per_block * args.nblocks * args.repeats}')
     print(f'Clock period: {args.clock_period_us} us')
-    print(f'Bandwidth: {bw:.3f} MB/s')
-    print(f'Total size: {args.lines_per_block * args.nblocks * 16 / 1024**2:.3f} MB')
+    print(f'Bandwidth: {bw:.3f} MiB/s')
+    print(f'Total size: {args.lines_per_block * args.nblocks * 16 / 1024**2:.3f} MiB')
     client = PandaClient(args.host)
     client.connect()
     configure_layout(args, client)
