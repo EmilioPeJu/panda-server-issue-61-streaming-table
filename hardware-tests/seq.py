@@ -19,6 +19,7 @@ def parse_args():
     parser.add_argument('--clock-period-us', type=float, default=0.4)
     parser.add_argument('--nblocks', type=int, default=1)
     parser.add_argument('--fpga-freq', type=int, default=125000000)
+    parser.add_argument('--max-blocks-queued', type=int, default=7)
     parser.add_argument(
         '--threads', type=int, default=1,
         help='Number of threads to use for creating the buffers data')
@@ -89,7 +90,8 @@ def handle_seq(args, q, event):
         event.set()
         print(f'seq: time to push table {i}: {t2 - t1:.3f}')
         assert result.startswith(b'OK'), f'seq: error putting table: {result}'
-        while streaming and seq.TABLE.QUEUED_LINES.get() > 3 * args.lines_per_block:
+        while streaming and (seq.TABLE.QUEUED_LINES.get() >=
+                             args.max_blocks_queued * args.lines_per_block):
             time.sleep(0.1)
 
     client.close()
@@ -194,8 +196,8 @@ def main():
     client = PandaClient(args.host)
     client.connect()
     configure_layout(args, client)
-    expect_q = multiprocessing.Queue(128)
-    buffer_q = multiprocessing.Queue(128)
+    expect_q = multiprocessing.Queue(64)
+    buffer_q = multiprocessing.Queue(64)
     produced = multiprocessing.Event()
     lock = multiprocessing.Lock()
     procs = []

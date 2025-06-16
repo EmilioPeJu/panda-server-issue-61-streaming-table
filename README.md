@@ -157,8 +157,26 @@ The test worked successfully, sending ~20.3GB of table data.
 - I got timing errors in my last build for Pandabox after implementing all the
   requirements. I will analyze the reports in Vivado to optimize timing.
 
-## Performance analysis
+- ZedBoard: SEQ test sending 2048x4MB buffers at 1.1MHz and using 2 threads to
+  generate table data.
+```bash
+ ./hardware-tests/seq.py --lines-per-block 262144 --clock-period-us 0.9 --threads 2 --nblocks 2048 192.168.0.1 --fpga-freq 50000000
+Lines per block: 262144
+Number of blocks: 2048
+Total lines: 536870912
+Clock period: 0.9 us
+Bandwidth: 16.954 MiB/s
+Total size: 8192.000 MiB
+Seq out bits offsets [10, 11, 12, 13, 14, 15] from BITS0
+seq: time to push table 0: 0.466
+seq: time to push table 1: 0.257
+seq: time to push table 2: 0.241
+seq: time to push table 3: 0.249
+...
+Checked 536870912 values
+```
 
+## Performance analysis
 ### Perf report
 - `perf` was built and manually copied to the target, to do this, I added the
   following target to rootfs:
@@ -204,3 +222,15 @@ If we consider maximum bursts, this provides an utilization of 92%, at 125MHz,
 the maximum bandwidth would be around 460MB/s.
 Considering that in practice, we can push the ethernet link to around 60MB/s,
 this test confirms that the AXI will not be the bottleneck.
+
+## Tricks
+### Poor man's network bandwidth monitoring
+For receive traffic(for the process with pid=$PID:
+```bash
+while true; do
+  b1=$(tail -n1 /proc/$PID/net/dev | tr -s ' ' | cut -d' ' -f 3)
+  sleep 0.5
+  b2=$(tail -n1 /proc/$PID/net/dev | tr -s ' ' | cut -d' ' -f 3)
+  echo $(( ( $b2 - $b1 ) / 1024 * 2 ))KiB
+done
+```
