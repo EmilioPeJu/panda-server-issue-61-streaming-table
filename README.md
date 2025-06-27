@@ -175,6 +175,36 @@ seq: time to push table 3: 0.249
 ...
 Checked 536870912 values
 ```
+- After moving rootfs to use yocto, I repeated the test and can now go faster,
+  not sure why. Here is an example run:
+
+```bash
+ ./hardware-tests/seq.py --lines-per-block 262144 --clock-period-us 0.7 --threads 2 --nblocks 256 192.168.0.1 --fpga-freq 50000000
+Lines per block: 262144
+Number of blocks: 256
+Total lines: 67108864
+Clock period: 0.7 us
+Bandwidth: 21.798 MiB/s
+Total size: 1024.000 MiB
+Seq out bits offsets [10, 11, 12, 13, 14, 15] from BITS0
+seq: pushing table 0
+seq: time to push table 0: 0.470
+seq: pushing table 1
+seq: time to push table 1: 0.249
+seq: pushing table 2
+seq: time to push table 2: 0.236
+seq: pushing table 3
+seq: time to push table 3: 0.247
+seq: pushing table 4
+seq: time to push table 4: 0.229
+seq: pushing table 5
+Enabling SEQ
+seq: time to push table 5: 0.237
+seq: pushing table 6
+seq: time to push table 6: 0.174
+...
+Checked 67108864 values
+```
 
 ## Performance analysis
 ### Perf report

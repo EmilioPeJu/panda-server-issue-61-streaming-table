@@ -61,7 +61,7 @@ def configure_layout(args, client):
     client.PCAP.ENABLE.put(f'{seq_name}.ACTIVE')
     client.PCAP.ENABLE.DELAY.put(1)
     client.PCAP.TRIG.put(f'{clock_name}.OUT')
-    client.PCAP.TRIG.DELAY.put(1)
+    client.PCAP.TRIG.DELAY.put(2)
     client.PCAP.TRIG_EDGE.put('Rising')
     client.PCAP.GATE.put('ONE')
     client.PCAP.GATE.DELAY.put(0)
