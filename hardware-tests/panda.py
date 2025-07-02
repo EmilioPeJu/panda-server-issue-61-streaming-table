@@ -21,7 +21,7 @@ class PandaClient(object):
     def connect(self):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(TIMEOUT)
-        # disable nagle algorithm to reduce latency
+        # disable Nagle's algorithm to reduce latency
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self.sock.connect((self.host, 8888))
         self.fetch_metadata()
@@ -97,7 +97,7 @@ class PandaClient(object):
 
         commands = [f'{name}{suffix}B']
         chunk_size = 191
-        #chunk_size = 100000
+        #chunk_size = 767
         for i in range(0, len(content), chunk_size):
             commands.append(b64encode(content[i:i+chunk_size]).decode())
         commands.append('')
@@ -113,19 +113,24 @@ class PandaClient(object):
     def disarm(self):
         self.send_recv('*PCAP.DISARM=')
 
-    def collect(self):
+    def collect(self, nbytes=None):
         data_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # disable nagle algorithm to reduce latency
+        # disable Nagle's algorithm to reduce latency
         data_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         data_sock.connect((self.host, 8889))
         data_sock.sendall(b'UNFRAMED RAW NO_HEADER NO_STATUS ONE_SHOT\n')
         acc = bytearray()
         while True:
-            chunk = data_sock.recv(4096)
+            chunk = data_sock.recv(1<<17)
             if not chunk:
                 break
+
             acc.extend(chunk)
-            if len(acc) % 4 == 0:
+            if nbytes:
+                if len(acc) >= nbytes:
+                    yield acc[:nbytes]
+                    acc = acc[nbytes:]
+            elif len(acc) % 4 == 0:
                 yield acc
                 acc = bytearray()
 

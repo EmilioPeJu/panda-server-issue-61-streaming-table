@@ -31,7 +31,7 @@ def parse_args():
     return args
 
 
-def configure_layout(args, client):
+def configure_layout(client):
     pgen_name = client.get_first_instance_name('PGEN')
     pgen = client[pgen_name]
     clock_name = client.get_first_instance_name('CLOCK')
@@ -66,7 +66,7 @@ def configure_layout(args, client):
 def handle_pgen(args):
     client = PandaClient(args.host)
     client.connect()
-    configure_layout(args, client)
+    configure_layout(client)
     pgen_name = client.get_first_instance_name('PGEN')
     pgen = client[pgen_name]
     clock_name = client.get_first_instance_name('CLOCK')
