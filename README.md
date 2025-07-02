@@ -205,6 +205,43 @@ seq: time to push table 6: 0.174
 ...
 Checked 67108864 values
 ```
+- First test in a pandabox (ts-mo-panda-01) results in DMA underruns, for some
+  reason the network bandwidth was limited to around 12.5MB/s which later was
+  found to be because of having an un-managed switch with some internal
+  fast-ethernet links upstream.
+
+- Tests were run in a different pandablox (ts-mo-panda-03), and again the first
+  tests resulted in DMA underruns, this time, the reason is that the CPU (of the
+  workstation) is not powerful enough to create the table data, push it and
+  check the pcap data in time. I decided to parallelise the table data creation
+  (producer threads) and the pcap data checking (checker threads), I set the
+  number of threads to use all the cores and the tests improved but still were
+  not successful.
+
+- I decided to reduce moving of data around threads, and pre-generate a set of
+  64 pseudo-random blocks, so instead of random generating the full block we
+  select a random block of the 64 choices each time a new table is needed.
+  This allowed to reduce resources used and allocating more CPU to the checker
+  threads. Finally, a test at 1MHz trigger period worked:
+```bash
+./hardware-tests/seq.py --lines-per-block 262144 --clock-period-us 1  --nblocks 1024 --checker-threads 8 --fpga-freq 125000000 172.23.252.203
+Lines per block: 262144
+Number of blocks: 1024
+Total lines: 268435456
+Clock period: 1.0 us
+Bandwidth: 15.259 MiB/s
+Total size: 4096.000 MiB
+...
+seq 1023: Took 0.174s to pushed table, line 268435456, expected first value 52
+...
+pcap 1023: block with 262144 lines
+pcap: received 268435456 values
+...
+checker 1023: Checking block line 268173312, expected start 52
+```
+This meets the requirements, it still is possible to trigger it faster, with a
+0.8us trigger period, the SEQ block still works, but PCAP falls behind until a
+buffer overrun occurs and can't check the following blocks.
 
 ## Performance analysis
 ### Perf report
