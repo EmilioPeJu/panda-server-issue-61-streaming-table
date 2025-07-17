@@ -1,5 +1,9 @@
 # Pandablocks-server issue 61: Support a streaming table
 
+DONE! This has been completed in the following PRs:
+- [PandABlocks-FPGA/pull/229](https://github.com/PandABlocks/PandABlocks-FPGA/pull/229)
+- [PandABlocks-server/pull/63](https://github.com/PandABlocks/PandABlocks-server/pull/63)
+
 ## Requirements
 - [x] Req 1: There should be 2 modes
 
@@ -282,7 +286,6 @@ checker 0: Checking block line 0, expected start 48
 pcap 255: took 0.126s + 0.000s = 0.126 (262144 lines)
 pcap: received 67108864 values
 checker 255: Checking block line 66846720, expected start 22
-...
 ```
 
 ## Performance analysis
