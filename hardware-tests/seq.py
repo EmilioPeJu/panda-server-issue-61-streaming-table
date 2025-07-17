@@ -4,7 +4,6 @@ import logging
 import math
 import multiprocessing
 import numpy as np
-import os
 import random
 import time
 
@@ -79,7 +78,6 @@ def handle_seq(args, allblocks, block_indexes, event):
     for i in range(args.nblocks):
         t1 = time.time()
         content, expected = allblocks[block_indexes[i]]
-        line += len(content) // 4
         result = client.put_table(
             f'{seq_name}.TABLE', content, streaming=(args.nblocks > 1),
             last=(i == args.nblocks - 1))
@@ -87,6 +85,7 @@ def handle_seq(args, allblocks, block_indexes, event):
         event.set()
         print(f'seq {i}: took {t2 - t1:.3f}s to push table, '
               f'line {line} , expected first value {expected[0]}')
+        line += len(content) // 4
         assert result.startswith(b'OK'), f'seq: error putting table: {result}'
         while streaming and (seq.TABLE.QUEUED_LINES.get() >=
                              args.max_blocks_queued * args.lines_per_block):
@@ -160,14 +159,15 @@ def checker(args, allblocks, block_indexes, checker_q, offsets):
         print(f'line {nblock * args.lines_per_block}, ', end='')
         print(f'expected start {expected[0]}')
         assert len(adata) == len(expected)
-        for word, expected_val in zip(adata, expected):
-            val = 0
-            for bit_i in range(6):
-                if (1 << offsets[bit_i]) & word:
-                    val |= 1 << bit_i
+        vals = np.zeros(len(adata), dtype=np.uint32)
+        for off_i, off in enumerate(offsets):
+            vals |= ((adata >> off) & 1) << off_i
 
-            assert val == expected_val, \
-                f'checker: expects {expected_val}, got {val}'
+        comp_result = vals == expected
+        if not comp_result.all():
+            i = np.where(~comp_result)[0][0]
+            assert vals[i] == expected[i], \
+                f'Got {vals[i]} expecting {expected[i]} at index {i}'
 
 
 def generate_content(args):
@@ -175,10 +175,10 @@ def generate_content(args):
     ticks = math.floor(args.clock_period_us * 1e-6 * args.fpga_freq)
     out_ticks = ticks // 2
     for i in range(64):
-        val = i
         content = np.zeros((args.lines_per_block * 4,), dtype=np.uint32)
-        expected = []
-        rand = val
+        expected = np.zeros((args.lines_per_block,), dtype=np.uint32)
+        val = i
+        rand = i
         for j in range(args.lines_per_block):
             w1 = 0x20001 | (val << 20)
             w2 = 0
@@ -188,7 +188,7 @@ def generate_content(args):
             content[j*4 + 1] = w2
             content[j*4 + 2] = w3
             content[j*4 + 3] = w4
-            expected.append(val)
+            expected[j] = val
             rand = (rand * 1103515245 + 12345) & 0x7fffffff
             val = rand & 0x3f
 

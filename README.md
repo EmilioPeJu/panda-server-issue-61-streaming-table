@@ -242,6 +242,48 @@ checker 1023: Checking block line 268173312, expected start 52
 This meets the requirements, it still is possible to trigger it faster, with a
 0.8us trigger period, the SEQ block still works, but PCAP falls behind until a
 buffer overrun occurs and can't check the following blocks.
+- One long test:
+```bash
+./hardware-tests/seq.py --lines-per-block 262144 --clock-period-us 0.9  --nblocks 65536 --checker-threads 8 --fpga-freq 125000000 172.23.252.203
+Lines per block: 262144
+Number of blocks: 65536
+Total lines: 17179869184
+Clock period: 0.9 us
+Bandwidth: 16.954 MiB/s
+Total size: 262144.000 MiB
+Seq out bits offsets [7, 9, 11, 13, 15, 17] from BITS2
+seq 0: took 0.191s to push table, line 262144 , expected first value 29
+...
+seq 65535: took 0.157s to push table, line 17179869184 , expected first value 38
+```
+The sequencer works fully till the end but pcap and checker thread are not able
+to catch up and stops checking after 662 blocks.
+- The checker code was improved (thanks MA for the suggestions) and I was able
+  to reduce checker threads to 2, here is a run in PandABox at 0.75us trigger
+  period:
+
+```bash
+$ ./hardware-tests/seq.py --lines-per-block 262144 --clock-period-us 0.75 --checker-threads 2 --nblocks 256 ts-mo-panda-03 --fpga-freq 125000000
+Lines per block: 262144
+Number of blocks: 256
+Total lines: 67108864
+Clock period: 0.75 us
+Bandwidth: 20.345 MiB/s
+Total size: 1024.000 MiB
+Seq out bits offsets [7, 9, 11, 13, 15, 17] from BITS2
+seq 0: took 0.261s to push table, line 0 , expected first value 48
+seq 1: took 0.254s to push table, line 262144 , expected first value 59
+seq 2: took 0.240s to push table, line 524288 , expected first value 7
+Enabling SEQ
+seq 3: took 0.192s to push table, line 786432 , expected first value 26
+pcap 0: took 0.950s + 0.000s = 0.950 (262144 lines)
+checker 0: Checking block line 0, expected start 48
+...
+pcap 255: took 0.126s + 0.000s = 0.126 (262144 lines)
+pcap: received 67108864 values
+checker 255: Checking block line 66846720, expected start 22
+...
+```
 
 ## Performance analysis
 ### Perf report
