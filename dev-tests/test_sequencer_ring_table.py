@@ -55,7 +55,7 @@ async def write_simple_entries_then_read(dut):
     dut.frame_ready_i.value = 1
     await RisingEdge(dut.clk_i)
     for part in batched(range(16), 4):
-        while dut.frame_valid_o == 0:
+        while dut.frame_valid_o.value == 0:
             await RisingEdge(dut.clk_i)
 
         value = part[0] + (part[1] << 32) + (part[2] << 64) + (part[3] << 96)
